@@ -11,3 +11,11 @@ app.include_router(
     prefix="/api",
     tags=["Question"]
 )
+
+@app.get("/awake", tags=["Health"])
+async def awake_service():
+    """
+    Simple endpoint to keep the service awake.
+    Can be pinged by cronjob or uptime monitoring.
+    """
+    return {"status": "alive"}
