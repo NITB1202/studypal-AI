@@ -17,7 +17,8 @@ class TextPreprocessingService:
         self.safety_buffer_tokens = safety_buffer_tokens
 
     def _merge_request_text(self, request: QuestionRequest) -> str:
-        parts = [request.prompt]
+        # Exclude user's prompt
+        parts = []
 
         if request.context:
             parts.append(request.context)
