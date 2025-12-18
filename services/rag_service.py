@@ -1,5 +1,7 @@
-from typing import List
+import uuid
+
 from models.rag_chunk import RAGChunk
+from typing import List, Dict, Any, Optional
 
 class RAGService:
     def __init__(
@@ -11,6 +13,37 @@ class RAGService:
         self.embedding_client = embedding_client
         self.vector_store = vector_store
         self.top_k = top_k
+
+    def to_rag_chunks(
+            self,
+            chunks: List[str],
+            source_id: str,
+            extra_metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[RAGChunk]:
+        if not chunks:
+            return []
+
+        extra_metadata = extra_metadata or {}
+        rag_chunks: List["RAGChunk"] = []
+
+        for idx, chunk in enumerate(chunks):
+            clean_chunk = chunk.strip()
+            if not clean_chunk:
+                continue  # Skip empty chunks
+
+            rag_chunks.append(
+                RAGChunk(
+                    id=f"{source_id}_{idx}_{uuid.uuid4().hex[:8]}",  # unique ID
+                    content=clean_chunk,
+                    metadata={
+                        "source_id": source_id,
+                        "chunk_index": idx,
+                        **extra_metadata,
+                    },
+                )
+            )
+
+        return rag_chunks
 
     def index_chunks(self, chunks: List[RAGChunk]) -> None:
         if not chunks:

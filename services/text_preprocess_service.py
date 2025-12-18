@@ -1,8 +1,9 @@
 import re
 import tiktoken
 
+from typing import Optional, List
+from models.document import Document
 from enums.preprocess_strategy import PreprocessStrategy
-from models.question_request import QuestionRequest
 
 class TextPreprocessingService:
     META_LINE_MAX_LEN = 40
@@ -16,26 +17,26 @@ class TextPreprocessingService:
         self.encoder = tiktoken.encoding_for_model(model)
         self.safety_buffer_tokens = safety_buffer_tokens
 
-    def _merge_request_text(self, request: QuestionRequest) -> str:
-        # Exclude user's prompt
+    def _merge_attachment_content(self, documents: Optional[List[Document]] = None) -> str:
         parts = []
 
-        if request.context:
-            parts.append(request.context)
-
-        if request.attachments:
-            parts.extend(request.attachments)
+        if documents:
+            for doc in documents:
+                parts.append(doc.content)
 
         return "\n".join(parts)
 
     def _estimate_tokens(self, text: str) -> int:
         return len(self.encoder.encode(text))
 
-    def get_preprocess_strategy(self, request) -> PreprocessStrategy:
-        total_text = self._merge_request_text(request)
+    def get_attachment_preprocess_strategy(self,
+                                           attachments: Optional[List[Document]] = None,
+                                           max_output_tokens: int = 512
+                                           ) -> PreprocessStrategy:
+        total_text = self._merge_attachment_content(attachments)
         total_tokens = self._estimate_tokens(total_text)
 
-        if total_tokens + request.max_output_tokens <= self.model_max_tokens:
+        if total_tokens + max_output_tokens <= self.model_max_tokens:
             return PreprocessStrategy.DIRECT
 
         if total_tokens > self.model_max_tokens * 2:
@@ -63,14 +64,14 @@ class TextPreprocessingService:
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
 
         for para in paragraphs:
-            para_tokens = self.estimate_tokens(para)
+            para_tokens = self._estimate_tokens(para)
 
             # If the paragraph is too long → fallback sentence
             if para_tokens > max_input_tokens:
                 sentences = re.split(r'(?<=[.!?])\s+', para)
 
                 for sent in sentences:
-                    sent_tokens = self.estimate_tokens(sent)
+                    sent_tokens = self._estimate_tokens(sent)
 
                     # If the sentence is too long → fallback token
                     if sent_tokens > max_input_tokens:
