@@ -17,7 +17,10 @@ class TextPreprocessingService:
         self.encoder = tiktoken.encoding_for_model(model)
         self.safety_buffer_tokens = safety_buffer_tokens
 
-    def _merge_attachment_content(self, documents: Optional[List[Document]] = None) -> str:
+    def _estimate_tokens(self, text: str) -> int:
+        return len(self.encoder.encode(text))
+
+    def merge_attachment_content(self, documents: Optional[List[Document]] = None) -> str:
         parts = []
 
         if documents:
@@ -26,15 +29,8 @@ class TextPreprocessingService:
 
         return "\n".join(parts)
 
-    def _estimate_tokens(self, text: str) -> int:
-        return len(self.encoder.encode(text))
-
-    def get_attachment_preprocess_strategy(self,
-                                           attachments: Optional[List[Document]] = None,
-                                           max_output_tokens: int = 512
-                                           ) -> PreprocessStrategy:
-        total_text = self._merge_attachment_content(attachments)
-        total_tokens = self._estimate_tokens(total_text)
+    def get_preprocess_strategy(self, text: str, max_output_tokens) -> PreprocessStrategy:
+        total_tokens = self._estimate_tokens(text)
 
         if total_tokens + max_output_tokens <= self.model_max_tokens:
             return PreprocessStrategy.DIRECT
@@ -148,7 +144,6 @@ class TextPreprocessingService:
             line = re.sub(r'^[-•*]\s*', '', line)
 
             # 4. Drop meta lines (language-agnostic heuristics)
-
             # Short title-like lines ending with ":" (e.g. "Summary:")
             if len(line) <= self.META_LINE_MAX_LEN and line.endswith(":"):
                 continue
