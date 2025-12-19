@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -12,3 +14,4 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
 
 settings = Settings()
+os.environ["OPENAI_API_KEY"] = settings.openai_api_key

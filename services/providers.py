@@ -8,6 +8,7 @@ from config.settings import settings
 
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
 import os
 
 # LLMService provider
@@ -20,15 +21,18 @@ def get_text_preprocessing_service() -> TextPreprocessingService:
 
 # RAGService provider
 def get_rag_service() -> RAGService:
-    # Create embedding client
     embedding_client = OpenAIEmbeddings(model=settings.embedding_model)
 
-    # Load or create vector store
-    vector_store_path = settings.vector_store_path
-    if os.path.exists(vector_store_path):
-        vector_store = FAISS.load_local(vector_store_path, embedding_client)
+    if os.path.exists(settings.vector_store_path):
+        vector_store = FAISS.load_local(
+            settings.vector_store_path,
+            embedding_client
+        )
     else:
-        vector_store = FAISS.from_texts([], embedding_client)
+        vector_store = FAISS.from_documents(
+            [Document(page_content="init")],
+            embedding_client
+        )
 
     return RAGService(embedding_client=embedding_client, vector_store=vector_store)
 
