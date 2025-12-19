@@ -15,11 +15,9 @@ class QuestionService:
     def __init__(self,
                  text_preprocessing_service: TextPreprocessingService,
                  rag_service: RAGService,
-                 system_prompt_factory: SystemPromptFactory,
                  llm_service: LLMService):
         self.text_preprocessing_service = text_preprocessing_service
         self.rag_service = rag_service
-        self.system_prompt_factory = system_prompt_factory
         self.llm_service = llm_service
 
     def handle_question(self, request: QuestionRequest) -> QuestionResponse:
