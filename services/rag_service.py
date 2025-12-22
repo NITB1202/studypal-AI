@@ -60,18 +60,16 @@ class RAGService:
         )
 
     def retrieve(self, query: str) -> List[RAGChunk]:
-        query_embedding = self.embedding_client.embed([query])[0]
-
-        results = self.vector_store.search(
-            embedding=query_embedding,
-            top_k=self.top_k,
+        results = self.vector_store.similarity_search(
+            query=query,
+            k=self.top_k
         )
 
         return [
             RAGChunk(
-                id=r["id"],
-                content=r["document"],
-                metadata=r.get("metadata", {}),
+                id=r.metadata.get("id", ""),
+                content=r.page_content,
+                metadata=r.metadata
             )
             for r in results
         ]

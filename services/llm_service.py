@@ -1,4 +1,5 @@
 import openai
+from openai import OpenAI
 
 from config.settings import settings
 from models.llm_request import LLMRequest
@@ -10,42 +11,43 @@ class LLMService:
         if not self.api_key:
             raise ValueError("OpenAI API key not found.")
         self.model = model
+        self.client = OpenAI(api_key=self.api_key)
 
-    def _build_messages(self, request: LLMRequest):
-        system_prompt = request.system_prompt
+    def _build_instructions(self, request: LLMRequest):
+        instructions = request.system_prompt
 
         if request.context:
-            system_prompt += f"\nUser context:\n{request.context}"
+            instructions += f"\nUser context:\n{request.context}"
 
         if request.additional_context:
-            system_prompt += f"\nRelevant data:\n{request.additional_context}"
+            instructions += f"\nRelevant data:\n{request.additional_context}"
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": request.user_prompt}
-        ]
-
-        return messages
+        return instructions
 
     def send_request(self, request: LLMRequest) -> LLMResponse:
         try:
-            # Build messages from LLMRequest
-            messages = self._build_messages(request)
+            # Build instructions
+            instructions = self._build_instructions(request)
 
-            # Call OpenAI API
-            response = openai.ChatCompletion.create(
+            # Call Responses API
+            response = self.client.responses.create(
                 model=self.model,
-                messages=messages,
-                temperature=request.temperature,
-                max_tokens=request.max_output_tokens,
-                api_key=self.api_key
+                instructions=instructions,
+                input=request.user_prompt,
             )
 
             # Extract answer and token usage
-            answer_text = response.choices[0].message["content"].strip()
-            usage = response.usage
-            input_tokens = usage.get("prompt_tokens", 0)
-            output_tokens = usage.get("completion_tokens", 0)
+            if hasattr(response, "output_text"):
+                answer_text = response.output_text.strip()
+            else:
+                answer_text = response.output[0].content[0].text.strip()
+
+            if hasattr(response, "usage") and response.usage:
+                input_tokens = getattr(response.usage, "input_tokens", 0)
+                output_tokens = getattr(response.usage, "output_tokens", 0)
+            else:
+                input_tokens = 0
+                output_tokens = 0
 
             return LLMResponse(
                 answer=answer_text,
@@ -54,7 +56,6 @@ class LLMService:
             )
 
         except Exception as e:
-            # Return LLMResponse with error message in answer
             return LLMResponse(
                 answer=f"Error calling OpenAI API: {e}",
                 input_tokens=0,
