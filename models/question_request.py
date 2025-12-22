@@ -1,5 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
+from models.document import Document
 
 class QuestionRequest(BaseModel):
     prompt: str = Field(
@@ -10,7 +11,7 @@ class QuestionRequest(BaseModel):
         default=None,
         description="Additional context"
     )
-    attachments: Optional[List[str]] = Field(
+    attachments: Optional[List[Document]] = Field(
         default=None,
         description="List of attachments"
     )

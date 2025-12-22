@@ -3,3 +3,8 @@ uvicorn
 python-dotenv
 openai
 pydantic
+tiktoken
+pydantic-settings
+langchain-openai
+langchain-community
+langchain-core
