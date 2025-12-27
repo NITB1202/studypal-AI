@@ -46,82 +46,54 @@ class TextPreprocessingService:
             max_output_tokens: int,
             overlap_tokens: int = 100
     ) -> list[str]:
-        max_input_tokens = (
-                self.model_max_tokens
-                - max_output_tokens
-                - self.safety_buffer_tokens
-        )
+        max_input_tokens = self.model_max_tokens - max_output_tokens - self.safety_buffer_tokens
 
-        chunks: list[str] = []
-        current_chunk = ""
-        current_tokens = 0
+        chunks: list[list[int]] = []
+        current_chunk_tokens: list[int] = []
 
-        # Split text into small paragraphs
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
 
         for para in paragraphs:
-            para_tokens = self._estimate_tokens(para)
+            para_tokens = self.encoder.encode(para)
 
-            # If the paragraph is too long → fallback sentence
-            if para_tokens > max_input_tokens:
+            if len(para_tokens) > max_input_tokens:
+                # fallback sentence
                 sentences = re.split(r'(?<=[.!?])\s+', para)
-
                 for sent in sentences:
-                    sent_tokens = self._estimate_tokens(sent)
+                    sent_tokens = self.encoder.encode(sent)
 
-                    # If the sentence is too long → fallback token
-                    if sent_tokens > max_input_tokens:
-                        token_ids = self.encoder.encode(sent)
-
-                        for i in range(0, len(token_ids), max_input_tokens):
-                            sub_tokens = token_ids[i:i + max_input_tokens]
-                            chunks.append(self.encoder.decode(sub_tokens))
+                    if len(sent_tokens) > max_input_tokens:
+                        # fallback token-level
+                        for i in range(0, len(sent_tokens), max_input_tokens):
+                            chunks.append(sent_tokens[i:i + max_input_tokens])
                         continue
 
-                    if current_tokens + sent_tokens > max_input_tokens:
-                        chunks.append(current_chunk)
-                        current_chunk = sent
-                        current_tokens = sent_tokens
+                    if len(current_chunk_tokens) + len(sent_tokens) > max_input_tokens:
+                        chunks.append(current_chunk_tokens)
+                        current_chunk_tokens = sent_tokens
                     else:
-                        current_chunk = (
-                            sent if not current_chunk else current_chunk + " " + sent
-                        )
-                        current_tokens += sent_tokens
-
-                continue
-
-            # Normal paragraph
-            if current_tokens + para_tokens > max_input_tokens:
-                chunks.append(current_chunk)
-                current_chunk = para
-                current_tokens = para_tokens
+                        current_chunk_tokens.extend(sent_tokens)
             else:
-                current_chunk = (
-                    para if not current_chunk else current_chunk + "\n\n" + para
-                )
-                current_tokens += para_tokens
+                if len(current_chunk_tokens) + len(para_tokens) > max_input_tokens:
+                    if current_chunk_tokens:
+                        chunks.append(current_chunk_tokens)
+                    current_chunk_tokens = para_tokens
+                else:
+                    current_chunk_tokens.extend(para_tokens)
 
-        if current_chunk:
-            chunks.append(current_chunk)
+        if current_chunk_tokens:
+            chunks.append(current_chunk_tokens)
 
         # Apply overlap
         if overlap_tokens > 0 and len(chunks) > 1:
-            overlapped_chunks = []
-
-            for i, chunk in enumerate(chunks):
-                if i == 0:
-                    overlapped_chunks.append(chunk)
-                    continue
-
-                prev_tokens = self.encoder.encode(chunks[i - 1])
-                overlap = prev_tokens[-overlap_tokens:]
-                overlap_text = self.encoder.decode(overlap)
-
-                overlapped_chunks.append(overlap_text + "\n" + chunk)
-
+            overlapped_chunks = [chunks[0]]
+            for prev, curr in zip(chunks, chunks[1:]):
+                overlap = prev[-overlap_tokens:] if overlap_tokens < len(prev) else prev
+                overlapped_chunks.append(overlap + curr)
             chunks = overlapped_chunks
 
-        return chunks
+        # Decode all chunks
+        return [self.encoder.decode(chunk_tokens) for chunk_tokens in chunks]
 
     def clean_summary(self, text: str) -> str:
         if not text or not text.strip():

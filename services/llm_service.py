@@ -1,6 +1,4 @@
-import openai
 from openai import OpenAI
-
 from config.settings import settings
 from models.llm_request import LLMRequest
 from models.llm_response import LLMResponse
@@ -34,6 +32,8 @@ class LLMService:
                 model=self.model,
                 instructions=instructions,
                 input=request.user_prompt,
+                temperature=request.temperature,
+                max_output_tokens=request.max_output_tokens,
             )
 
             # Extract answer and token usage
@@ -54,6 +54,42 @@ class LLMService:
                 input_tokens=input_tokens,
                 output_tokens=output_tokens
             )
+
+        except Exception as e:
+            return LLMResponse(
+                answer=f"Error calling OpenAI API: {e}",
+                input_tokens=0,
+                output_tokens=0
+            )
+
+    def stream_request(self, request: LLMRequest):
+        try:
+            # Build instructions
+            instructions = self._build_instructions(request)
+
+            # Streaming call to Responses API
+            stream = self.client.responses.create(
+                model=self.model,
+                instructions=instructions,
+                input=request.user_prompt,
+                temperature=request.temperature,
+                max_output_tokens=request.max_output_tokens,
+                stream=True
+            )
+
+            for event in stream:
+                # Text chunk event
+                if event.type == "response.output_text.delta":
+                    text_delta = event.delta
+                    if text_delta:
+                        yield LLMResponse(answer=text_delta, input_tokens=0, output_tokens=0)
+
+                # Completed event
+                elif event.type == "response.completed":
+                    usage = getattr(event.response, "usage", None)
+                    input_tokens = getattr(usage, "input_tokens", 0) if usage else 0
+                    output_tokens = getattr(usage, "output_tokens", 0) if usage else 0
+                    yield LLMResponse(answer="", input_tokens=input_tokens, output_tokens=output_tokens)
 
         except Exception as e:
             return LLMResponse(

@@ -8,3 +8,4 @@ pydantic-settings
 langchain-openai
 langchain-community
 langchain-core
+starlette
