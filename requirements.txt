@@ -3,9 +3,11 @@ uvicorn
 python-dotenv
 openai
 pydantic
-tiktoken
 pydantic-settings
+tiktoken
 langchain-openai
 langchain-community
 langchain-core
 starlette
+numpy
+faiss-cpu
