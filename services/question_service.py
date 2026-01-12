@@ -9,6 +9,7 @@ from services.rag_service import RAGService
 from services.system_prompt_factory import SystemPromptFactory
 from services.text_preprocessing_service import TextPreprocessingService
 
+
 class QuestionService:
 
     def __init__(self,
@@ -21,10 +22,7 @@ class QuestionService:
 
     def handle_question(self, request: QuestionRequest):
         merged_attachments_content = self.text_preprocessing_service.merge_attachment_content(request.attachments)
-        strategy = self.text_preprocessing_service.get_preprocess_strategy(
-            merged_attachments_content,
-            request.max_output_tokens
-        )
+        strategy = self.text_preprocessing_service.get_preprocess_strategy(merged_attachments_content)
 
         all_rag_chunks: List[RAGChunk] = []
 
@@ -42,9 +40,7 @@ class QuestionService:
                     summary = llm_response.answer
 
                     cleaned_summary = self.text_preprocessing_service.clean_summary(summary)
-                    next_strategy = self.text_preprocessing_service.get_preprocess_strategy(
-                        cleaned_summary, request.max_output_tokens
-                    )
+                    next_strategy = self.text_preprocessing_service.get_preprocess_strategy(cleaned_summary)
 
                     if next_strategy == PreprocessStrategy.CHUNK:
                         chunks = self.text_preprocessing_service.chunk(cleaned_summary, request.max_output_tokens)
@@ -52,17 +48,26 @@ class QuestionService:
                         chunks = [cleaned_summary]
 
                 rag_chunks = self.rag_service.to_rag_chunks(chunks, attachment.fileName)
-
                 all_rag_chunks.extend(rag_chunks)
-                self.rag_service.index_chunks(rag_chunks)
 
-        retrieved_chunks = self.rag_service.retrieve(request.prompt)
+        top_k = self.rag_service.top_k
+        kb_chunks: List[RAGChunk] = []
 
-        additional_context = self.rag_service.build_context(retrieved_chunks)
+        if len(all_rag_chunks) > top_k:
+            attachment_chunks = self.rag_service.rank_chunks(all_rag_chunks, request.prompt, top_k)
+        elif len(all_rag_chunks) == top_k:
+            attachment_chunks = all_rag_chunks
+        else:
+            needed = top_k - len(all_rag_chunks)
+            attachment_chunks = all_rag_chunks
+            kb_chunks = self.rag_service.retrieve(request.prompt, needed)
+
+        self.rag_service.index_chunks(all_rag_chunks)
+
         system_prompt = SystemPromptFactory.get_planner_prompt()
-
         llm_request = LLMMapper.to_llm_request(request=request, system_prompt=system_prompt,
-                                               additional_context=additional_context)
+                                               attachment_chunks=attachment_chunks,
+                                               kb_chunks=kb_chunks)
 
         for llm_response in self.llm_service.stream_request(llm_request):
             yield LLMMapper.to_question_response(llm_response)

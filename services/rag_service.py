@@ -1,4 +1,5 @@
 import uuid
+import numpy as np
 
 from models.rag_chunk import RAGChunk
 from typing import List, Dict, Any, Optional
@@ -50,19 +51,19 @@ class RAGService:
             return
 
         texts = [c.content for c in chunks]
-        embeddings = self.embedding_client.embed(texts)
+        metadatas = [c.metadata for c in chunks]
+        ids = [c.id for c in chunks]
 
-        self.vector_store.add(
-            embeddings=embeddings,
-            documents=[c.content for c in chunks],
-            metadatas=[c.metadata for c in chunks],
-            ids=[c.id for c in chunks],
+        self.vector_store.add_texts(
+            texts=texts,
+            metadatas=metadatas,
+            ids=ids,
         )
 
-    def retrieve(self, query: str) -> List[RAGChunk]:
+    def retrieve(self, query: str, top_k: int | None = None) -> List[RAGChunk]:
         results = self.vector_store.similarity_search(
             query=query,
-            k=self.top_k
+            k=top_k or self.top_k
         )
 
         return [
@@ -74,16 +75,30 @@ class RAGService:
             for r in results
         ]
 
-    def build_context(self, chunks: List[RAGChunk], max_chunks: int = 5) -> str:
-        selected_chunks = [
-            c for c in chunks[:max_chunks]
-            if c.content and c.content.strip()
-        ]
+    def rank_chunks(
+            self,
+            chunks: List[RAGChunk],
+            query: str,
+            top_k: int | None = None,
+    ) -> List[RAGChunk]:
+        if not chunks:
+            return []
 
-        if not selected_chunks:
-            return ""
-
-        return "\n\n".join(
-            f"[Source {i + 1}]\n{chunk.content}"
-            for i, chunk in enumerate(selected_chunks)
+        top_k = top_k or self.top_k
+        query_embedding = self.embedding_client.embed_query(query)
+        chunk_embeddings = self.embedding_client.embed_documents(
+            [c.content for c in chunks]
         )
+
+        def cosine_similarity(a, b):
+            a = np.array(a)
+            b = np.array(b)
+            return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+        scored_chunks = []
+        for chunk, emb in zip(chunks, chunk_embeddings):
+            score = cosine_similarity(query_embedding, emb)
+            scored_chunks.append((score, chunk))
+
+        scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        return [chunk for _, chunk in scored_chunks[:top_k]]
