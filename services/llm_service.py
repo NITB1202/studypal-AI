@@ -11,14 +11,27 @@ class LLMService:
         self.model = model
         self.client = OpenAI(api_key=self.api_key)
 
-    def _build_instructions(self, request: LLMRequest):
+    def _build_instructions(self, request: LLMRequest) -> str:
         instructions = request.system_prompt
 
-        if request.context:
-            instructions += f"\nUser context:\n{request.context}"
+        if request.attachment_chunks:
+            instructions += "\n\nUser-provided attachments:\n"
+            for i, chunk in enumerate(request.attachment_chunks, start=1):
+                instructions += (
+                    f"\n[Attachment {i}]\n"
+                    f"{chunk.content}\n"
+                )
 
-        if request.additional_context:
-            instructions += f"\nRelevant data:\n{request.additional_context}"
+        if request.context:
+            instructions += f"\n\nUser context:\n{request.context}\n"
+
+        if request.kb_chunks:
+            instructions += "\n\nRelevant knowledge base data:\n"
+            for i, chunk in enumerate(request.kb_chunks, start=1):
+                instructions += (
+                    f"\n[KB {i}]\n"
+                    f"{chunk.content}\n"
+                )
 
         return instructions
 

@@ -1,4 +1,6 @@
+import faiss
 from fastapi import Depends
+from langchain_community.docstore import InMemoryDocstore
 
 from services.llm_service import LLMService
 from services.question_service import QuestionService
@@ -8,7 +10,6 @@ from config.settings import settings
 
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
-from langchain_core.documents import Document
 import os
 
 # LLMService provider
@@ -29,9 +30,14 @@ def get_rag_service() -> RAGService:
             embedding_client
         )
     else:
-        vector_store = FAISS.from_documents(
-            [Document(page_content="init")],
-            embedding_client
+        dim = len(embedding_client.embed_query("dimension_check"))
+        index = faiss.IndexFlatL2(dim)
+
+        vector_store = FAISS(
+            embedding_function=embedding_client,
+            index=index,
+            docstore=InMemoryDocstore({}),
+            index_to_docstore_id={}
         )
 
     return RAGService(embedding_client=embedding_client, vector_store=vector_store)

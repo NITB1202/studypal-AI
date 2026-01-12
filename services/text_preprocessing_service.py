@@ -29,10 +29,10 @@ class TextPreprocessingService:
 
         return "\n".join(parts)
 
-    def get_preprocess_strategy(self, text: str, max_output_tokens) -> PreprocessStrategy:
+    def get_preprocess_strategy(self, text: str) -> PreprocessStrategy:
         total_tokens = self._estimate_tokens(text)
 
-        if total_tokens + max_output_tokens <= self.model_max_tokens:
+        if total_tokens <= self.model_max_tokens:
             return PreprocessStrategy.DIRECT
 
         if total_tokens > self.model_max_tokens * 2:
